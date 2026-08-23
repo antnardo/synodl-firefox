@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Réglages SynoDL</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1><img src="../icons/icon-96.png" alt="" />Réglages SynoDL</h1>
+      <p class="hint">
+        Envoi de liens vers la Download Station d'un NAS Synology.
+      </p>
+
+      <h2>NAS</h2>
+      <div class="row">
+        <div class="narrow">
+          <label for="protocol">Protocole</label>
+          <select id="protocol">
+            <option value="https">https</option>
+            <option value="http">http</option>
+          </select>
+        </div>
+        <div>
+          <label for="host">Adresse</label>
+          <input id="host" type="text" placeholder="192.168.1.20" />
+        </div>
+        <div class="narrow">
+          <label for="port">Port</label>
+          <input id="port" type="number" min="1" max="65535" placeholder="5001" />
+        </div>
+      </div>
+      <p class="hint">
+        En https avec le certificat auto-signé d'origine, ouvrez une fois
+        l'adresse du NAS dans un onglet Firefox et acceptez l'exception de
+        sécurité — sinon toutes les requêtes de l'extension échoueront.
+      </p>
+
+      <h2>Compte DSM</h2>
+      <div class="row">
+        <div>
+          <label for="username">Utilisateur</label>
+          <input id="username" type="text" autocomplete="off" />
+        </div>
+        <div>
+          <label for="password">Mot de passe</label>
+          <input id="password" type="password" autocomplete="off" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="otp">Code 2FA (une seule fois, si le compte l'exige)</label>
+          <input id="otp" type="text" inputmode="numeric" placeholder="123456" autocomplete="off" />
+          <p class="hint" id="device-state"></p>
+        </div>
+      </div>
+
+      <h2>Destinations</h2>
+      <label for="destinations">Un chemin par ligne, le premier sert de défaut</label>
+      <textarea id="destinations" rows="4" placeholder="video/Films&#10;video/Series&#10;download"></textarea>
+      <p class="hint">
+        Chemins relatifs à la racine des partages, sans slash initial. Laissez
+        vide pour utiliser la destination par défaut de Download Station.
+      </p>
+      <div class="buttons">
+        <button id="load-shares" type="button">Lister les dossiers partagés</button>
+      </div>
+      <div class="chips" id="shares"></div>
+
+      <h2>Notifications</h2>
+      <label class="check">
+        <input id="notify" type="checkbox" />
+        Afficher une notification quand un téléchargement est ajouté
+      </label>
+
+      <div class="buttons">
+        <button id="save" class="primary" type="button">Enregistrer</button>
+        <button id="test" type="button">Tester la connexion</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <script src="syno.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

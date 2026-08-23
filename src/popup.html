@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SynoDL</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="popup">
+    <h1><img src="../icons/icon-96.png" alt="" />Download Station</h1>
+
+    <div class="field">
+      <label for="urls">Liens (un par ligne)</label>
+      <textarea id="urls" rows="4" placeholder="https://…&#10;magnet:?xt=…"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="destination">Destination</label>
+      <select id="destination"></select>
+    </div>
+
+    <div class="buttons">
+      <button id="send" class="primary" type="button">Envoyer</button>
+      <button id="from-tab" type="button">URL de l'onglet</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="linkbar"><a id="open-options">Réglages…</a></div>
+
+    <script src="syno.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

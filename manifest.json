@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "SynoDL",
+  "version": "1.0.0",
+  "description": "Envoie un lien vers la Download Station d'un NAS Synology depuis le menu contextuel.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "synodl@antnardo.github.io",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "notifications",
+    "activeTab"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "scripts": [
+      "src/syno.js",
+      "src/background.js"
+    ]
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "SynoDL — Download Station",
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
+  }
+}
