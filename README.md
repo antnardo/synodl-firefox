@@ -87,7 +87,7 @@ publiée sur le catalogue public et ne passe pas en revue humaine.
 
 2. Aller sur le tableau de bord développeur d'addons.mozilla.org
    (`addons.mozilla.org/developers/addon/submit/distribution`), choisir
-   **On your own**, et téléverser `dist/synodl-1.0.0.xpi`.
+   **On your own**, et téléverser le `dist/synodl-<version>.xpi` produit.
 3. Récupérer le `.xpi` signé, puis le glisser dans une fenêtre Firefox.
 
 Pour chaque mise à jour, incrémenter `version` dans `manifest.json` avant de
