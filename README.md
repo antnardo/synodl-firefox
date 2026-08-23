@@ -11,7 +11,7 @@ sélectionnée dans du texte.
 
 ## Prérequis
 
-- Firefox 128 ou plus récent.
+- Firefox 142 ou plus récent.
 - Download Station installé et démarré sur le NAS (DSM 7).
 - Un compte DSM autorisé sur Download Station.
 
@@ -62,22 +62,39 @@ les requêtes de l'extension. Elle survit aux redémarrages.
 
 ## Installation
 
-### Essai immédiat, sans signature
+### Depuis la release — la voie normale
 
-L'add-on se charge temporairement et disparaît au redémarrage de Firefox —
-parfait pour tester.
+1. Télécharger le `.xpi` de la [dernière
+   release](https://github.com/antnardo/synodl-firefox/releases/latest).
+2. Le glisser dans une fenêtre Firefox et confirmer l'installation.
+
+L'archive attachée aux releases est signée par Mozilla : l'installation est
+permanente, sur n'importe quelle édition de Firefox. En revanche il n'y a pas
+de mise à jour automatique — pour changer de version, reprendre les deux mêmes
+étapes avec le nouveau `.xpi`.
+
+Enchaîner ensuite sur la [configuration](#configuration).
+
+### Chargement temporaire — pour développer
+
+L'add-on se charge sans signature, et disparaît au redémarrage de Firefox.
 
 1. Ouvrir `about:debugging#/runtime/this-firefox`.
 2. **Charger un module complémentaire temporaire…**
 3. Choisir le fichier `manifest.json` de ce dossier.
 
-### Installation permanente
+C'est aussi de là que se lisent les journaux, via le bouton **Inspecter**.
 
-Firefox (édition Release ou Beta) refuse d'installer durablement une extension
-non signée. Deux voies possibles :
+### Signer sa propre version — si vous modifiez le code
+
+Firefox en édition Release ou Beta refuse d'installer durablement une extension
+non signée : un fork ou une modification locale doit donc repasser par une
+signature. Deux voies possibles.
 
 **A. Signature Mozilla en distribution privée** — gratuit, l'extension n'est pas
-publiée sur le catalogue public et ne passe pas en revue humaine.
+publiée sur le catalogue public et ne passe pas en revue humaine. Il faut un
+compte Mozilla, avec double authentification obligatoire pour les développeurs
+d'add-ons.
 
 1. Construire l'archive :
 
@@ -85,13 +102,22 @@ publiée sur le catalogue public et ne passe pas en revue humaine.
    ./build.sh
    ```
 
-2. Aller sur le tableau de bord développeur d'addons.mozilla.org
-   (`addons.mozilla.org/developers/addon/submit/distribution`), choisir
-   **On your own**, et téléverser le `dist/synodl-<version>.xpi` produit.
+2. Sur le tableau de bord développeur d'addons.mozilla.org, choisir **On your
+   own**, et téléverser le `dist/synodl-<version>.xpi` produit.
 3. Récupérer le `.xpi` signé, puis le glisser dans une fenêtre Firefox.
 
-Pour chaque mise à jour, incrémenter `version` dans `manifest.json` avant de
-reconstruire.
+Avant de téléverser, **changer l'identifiant** dans `manifest.json`
+(`browser_specific_settings.gecko.id`) : celui d'origine appartient au compte
+AMO de ce dépôt et sera refusé. Et incrémenter `version` à chaque envoi, AMO
+refusant deux fois le même numéro.
+
+Valider comme le fait AMO, avec la version courante du linter — une version
+épinglée traîne des données de compatibilité plus anciennes et laisse passer
+des avertissements :
+
+```bash
+npx web-ext@latest lint --source-dir=. --self-hosted --ignore-files "dist/**" "build.sh"
+```
 
 **B. Désactiver la vérification de signature** — possible uniquement sur Firefox
 Developer Edition, Nightly ou ESR : dans `about:config`, passer
@@ -255,9 +281,11 @@ en face de SynoDL.
 
 ## État
 
-Le paquet passe la validation Mozilla sans erreur ni avertissement, et la
-chaîne complète — connexion DSM, menu contextuel, création de tâche — a été
-vérifiée sur un DS920+ en DSM 7.3.
+La 1.0.1 est signée par Mozilla et distribuée dans les
+[releases](https://github.com/antnardo/synodl-firefox/releases). Le paquet
+passe la validation AMO sans erreur ni avertissement, et la chaîne complète —
+connexion DSM, menu contextuel, création de tâche — a été vérifiée sur un
+DS920+ en DSM 7.3.
 
 ---
 
