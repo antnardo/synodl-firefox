@@ -1,246 +1,242 @@
-# SynoDL — extension Firefox pour la Download Station
+# SynoDL — Firefox extension for Synology Download Station
 
-Clic droit sur un lien dans Firefox → le fichier part en téléchargement sur le
-NAS Synology, sans passer par l'interface DSM ni par l'ordinateur.
+Right-click a link in Firefox → the file starts downloading on the Synology
+NAS, without going through the DSM interface or your computer.
 
-Fonctionne avec les liens `http(s)`, `ftp`, `magnet`, `ed2k`, sur les liens
-d'une page comme sur les images, vidéos et sons, ou sur une URL simplement
-sélectionnée dans du texte.
+Works with `http(s)`, `ftp`, `magnet` and `ed2k` links, on page links as well
+as images, videos and audio, or on a URL simply selected in text.
 
 ---
 
-## Prérequis
+## Requirements
 
-- Firefox 142 ou plus récent.
-- Download Station installé et démarré sur le NAS (DSM 7).
-- Un compte DSM autorisé sur Download Station.
+- Firefox 142 or newer.
+- Download Station installed and running on the NAS (DSM 7).
+- A DSM account allowed to use Download Station.
 
-L'extension s'appuie sur ces APIs, qu'un DSM 7 avec Download Station expose
-toutes :
+The extension relies on these APIs, all of which a DSM 7 with Download Station
+exposes:
 
 ```text
 SYNO.API.Auth               entry.cgi
 SYNO.DownloadStation.Task   DownloadStation/task.cgi
 SYNO.DownloadStation2.Task  entry.cgi
-SYNO.FileStation.List       entry.cgi   (facultatif, listage des partages)
+SYNO.FileStation.List       entry.cgi   (optional, lists shared folders)
 ```
 
-Pour vérifier ce que publie votre NAS, sans identifiants :
+To check what your own NAS publishes, no credentials needed:
 
 ```bash
-curl -sk "https://VOTRE-NAS:5001/webapi/query.cgi?api=SYNO.API.Info\
+curl -sk "https://YOUR-NAS:5001/webapi/query.cgi?api=SYNO.API.Info\
 &version=1&method=query&query=SYNO.DownloadStation.Task,SYNO.DownloadStation2.Task"
 ```
 
 ---
 
-## Étape 0 — accepter le certificat du NAS
+## Step 0 — trust the NAS certificate
 
-**À faire avant tout le reste, sinon rien ne fonctionnera.**
+**Do this before anything else, or nothing will work.**
 
-DSM est servi en HTTPS (port `5001` par défaut, souvent modifié) avec le
-certificat auto-signé d'usine de Synology — `CN=synology.com`, émis par
-`Synology Inc. CA`. Firefox le refuse par défaut, et une requête d'extension
-échoue alors en silence : il n'y a pas de page d'avertissement sur laquelle
-cliquer.
+DSM is served over HTTPS (port `5001` by default, often changed) with
+Synology's factory self-signed certificate — `CN=synology.com`, issued by
+`Synology Inc. CA`. Firefox rejects it by default, and an extension request
+then fails silently: there is no warning page to click through.
 
-Il faut donc créer l'exception une fois, à la main :
+So the exception has to be created once, by hand:
 
-1. Ouvrir `https://VOTRE-NAS:5001` dans un onglet Firefox, en remplaçant
-   l'adresse et le port par les vôtres.
-2. Cliquer **Avancé…** puis **Accepter le risque et poursuivre**.
+1. Open `https://YOUR-NAS:5001` in a Firefox tab, substituting your own
+   address and port.
+2. Click **Advanced…** then **Accept the Risk and Continue**.
 
-L'exception est enregistrée dans le profil Firefox et vaut ensuite pour toutes
-les requêtes de l'extension. Elle survit aux redémarrages.
+The exception is stored in the Firefox profile and applies from then on to
+every request the extension makes. It survives restarts.
 
-> Variante plus propre : installer sur le NAS un certificat valide — Let's
-> Encrypt, directement depuis DSM ou via un reverse proxy — et configurer
-> l'extension avec le nom de domaine correspondant. L'étape 0 devient alors
-> inutile.
+> Cleaner alternative: install a valid certificate on the NAS — Let's Encrypt,
+> either straight from DSM or through a reverse proxy — and point the extension
+> at the matching domain name. Step 0 then becomes unnecessary.
 
 ---
 
 ## Installation
 
-### Depuis la release — la voie normale
+### From the release — the normal route
 
-1. Télécharger le `.xpi` de la [dernière
+1. Download the `.xpi` from the [latest
    release](https://github.com/antnardo/synodl-firefox/releases/latest).
-2. Le glisser dans une fenêtre Firefox et confirmer l'installation.
+2. Drag it into a Firefox window and confirm the installation.
 
-L'archive attachée aux releases est signée par Mozilla : l'installation est
-permanente, sur n'importe quelle édition de Firefox. En revanche il n'y a pas
-de mise à jour automatique — pour changer de version, reprendre les deux mêmes
-étapes avec le nouveau `.xpi`.
+The archive attached to releases is signed by Mozilla, so the installation is
+permanent on any Firefox edition. There is no automatic update, however — to
+move to a newer version, repeat the same two steps with the new `.xpi`.
 
-Enchaîner ensuite sur la [configuration](#configuration).
+Then carry on with [configuration](#configuration).
 
-### Chargement temporaire — pour développer
+### Temporary load — for development
 
-L'add-on se charge sans signature, et disparaît au redémarrage de Firefox.
+The add-on loads without a signature, and disappears when Firefox restarts.
 
-1. Ouvrir `about:debugging#/runtime/this-firefox`.
-2. **Charger un module complémentaire temporaire…**
-3. Choisir le fichier `manifest.json` de ce dossier.
+1. Open `about:debugging#/runtime/this-firefox`.
+2. **Load Temporary Add-on…**
+3. Pick the `manifest.json` file in this folder.
 
-C'est aussi de là que se lisent les journaux, via le bouton **Inspecter**.
+This is also where the logs are read, through the **Inspect** button.
 
-### Signer sa propre version — si vous modifiez le code
+### Signing your own build — if you modify the code
 
-Firefox en édition Release ou Beta refuse d'installer durablement une extension
-non signée : un fork ou une modification locale doit donc repasser par une
-signature. Deux voies possibles.
+Firefox Release and Beta editions refuse to permanently install an unsigned
+extension, so a fork or a local change has to go through signing again. Two
+routes are available.
 
-**A. Signature Mozilla en distribution privée** — gratuit, l'extension n'est pas
-publiée sur le catalogue public et ne passe pas en revue humaine. Il faut un
-compte Mozilla, avec double authentification obligatoire pour les développeurs
-d'add-ons.
+**A. Mozilla signature, self-distributed** — free, the extension is not
+published in the public catalogue and gets no human review. It needs a Mozilla
+account, with two-factor authentication mandatory for add-on developers.
 
-1. Construire l'archive :
+1. Build the archive:
 
    ```bash
    ./build.sh
    ```
 
-2. Sur le tableau de bord développeur d'addons.mozilla.org, choisir **On your
-   own**, et téléverser le `dist/synodl-<version>.xpi` produit.
-3. Récupérer le `.xpi` signé, puis le glisser dans une fenêtre Firefox.
+2. On the addons.mozilla.org developer hub, choose **On your own**, and upload
+   the resulting `dist/synodl-<version>.xpi`.
+3. Download the signed `.xpi`, then drag it into a Firefox window.
 
-Avant de téléverser, **changer l'identifiant** dans `manifest.json`
-(`browser_specific_settings.gecko.id`) : celui d'origine appartient au compte
-AMO de ce dépôt et sera refusé. Et incrémenter `version` à chaque envoi, AMO
-refusant deux fois le même numéro.
+Before uploading, **change the identifier** in `manifest.json`
+(`browser_specific_settings.gecko.id`): the original one belongs to this
+repository's AMO account and will be rejected. Also bump `version` on every
+upload, since AMO refuses the same number twice.
 
-Valider comme le fait AMO, avec la version courante du linter — une version
-épinglée traîne des données de compatibilité plus anciennes et laisse passer
-des avertissements :
+Validate the way AMO does, using the current linter — a pinned version carries
+older compatibility data and lets warnings slip through:
 
 ```bash
 npx web-ext@latest lint --source-dir=. --self-hosted --ignore-files "dist/**" "build.sh"
 ```
 
-**B. Désactiver la vérification de signature** — possible uniquement sur Firefox
-Developer Edition, Nightly ou ESR : dans `about:config`, passer
-`xpinstall.signatures.required` à `false`. Sans effet sur l'édition Release.
+**B. Disable signature enforcement** — only possible on Firefox Developer
+Edition, Nightly or ESR: in `about:config`, set
+`xpinstall.signatures.required` to `false`. No effect on the Release edition.
 
 ---
 
 ## Configuration
 
-Réglages de l'extension (`about:addons` → SynoDL → Préférences) :
+Extension settings (`about:addons` → SynoDL → Preferences):
 
-| Champ | Exemple |
+| Field | Example |
 | --- | --- |
-| Protocole | `https` |
-| Adresse | `192.168.1.20`, ou le nom d'hôte du NAS |
-| Port | `5001`, ou le port DSM que vous avez défini |
-| Utilisateur / mot de passe | compte DSM dédié (voir plus bas) |
-| Code 2FA | seulement si le compte l'exige, une seule fois |
-| Destinations | un chemin par ligne, ex. `video/Films` |
+| Protocol | `https` |
+| Address | `192.168.1.20`, or the NAS hostname |
+| Port | `5001`, or whichever DSM port you set |
+| Username / password | a dedicated DSM account (see below) |
+| 2FA code | only if the account requires it, once |
+| Destinations | one path per line, e.g. `video/Films` |
 
-Le bouton **Lister les dossiers partagés** interroge File Station et propose les
-partages en un clic. **Tester la connexion** vérifie l'ensemble de la chaîne et
-affiche la version de Download Station ainsi que sa destination par défaut.
+The **List shared folders** button queries File Station and offers the shares
+in one click. **Test connection** exercises the whole chain and reports the
+Download Station version along with its default destination.
 
-À l'enregistrement, Firefox demande l'autorisation de contacter l'hôte saisi :
-c'est normal, l'extension ne connaît pas l'adresse du NAS à l'avance et ne
-réclame donc aucune permission d'hôte à l'installation.
+On save, Firefox asks permission to contact the host you entered. That is
+expected: the extension cannot know the NAS address in advance, so it requests
+no host permission at install time.
+
+> The extension interface is currently French-only. This README is the English
+> reference for what each control does.
 
 ### Destinations
 
-Les chemins sont relatifs à la racine des partages, sans slash initial
-(`video/Films`, pas `/volume1/video/Films`). Le premier de la liste est celui
-proposé en tête de menu.
+Paths are relative to the root of the shares, with no leading slash
+(`video/Films`, not `/volume1/video/Films`). The first one in the list is the
+one offered at the top of the menu.
 
-- Aucune destination : une entrée unique dans le menu contextuel, le NAS range
-  le fichier dans la destination par défaut de Download Station.
-- Une seule destination : une entrée unique, qui l'utilise.
-- Plusieurs destinations : un sous-menu, avec en dernier « Dossier par défaut du
-  NAS ».
+- No destination: a single context-menu entry, and the NAS files the download
+  under Download Station's own default destination.
+- One destination: a single entry, using it.
+- Several destinations: a submenu, ending with the NAS default folder.
 
-### Double authentification
+### Two-factor authentication
 
-Si le compte DSM impose un code 2FA, le saisir une fois dans les réglages :
-l'extension demande alors un jeton d'appareil à DSM (`enable_device_token`) et
-le conserve. Les connexions suivantes n'ont plus besoin de code.
-
----
-
-## Utilisation
-
-- **Clic droit sur un lien** → *Envoyer à la Download Station* (avec le
-  sous-menu de destinations s'il y en a plusieurs).
-- **Clic droit sur une URL sélectionnée** → même chose, l'URL est extraite du
-  texte.
-- **Bouton de la barre d'outils** → coller plusieurs liens d'un coup, un par
-  ligne, ou reprendre l'URL de l'onglet courant.
-
-Une notification confirme l'ajout, ou affiche l'erreur renvoyée par DSM
-traduite en clair.
+If the DSM account enforces a 2FA code, enter one once in the settings: the
+extension then asks DSM for a device token (`enable_device_token`) and keeps
+it. Later logins no longer need a code.
 
 ---
 
-## Sécurité
+## Usage
 
-Le mot de passe DSM est stocké **en clair** dans le stockage local de
-l'extension, à l'intérieur du profil Firefox. C'est la limite du procédé : une
-extension ne dispose d'aucun coffre chiffré.
+- **Right-click a link** → *Send to Download Station* (with the destination
+  submenu when there is more than one).
+- **Right-click a selected URL** → same thing, the URL is extracted from the
+  text.
+- **Toolbar button** → paste several links at once, one per line, or pull in
+  the current tab's URL.
 
-Conséquence pratique : créer dans DSM un **utilisateur dédié**, membre d'un
-groupe qui n'a accès qu'à Download Station et en écriture aux seuls dossiers de
-destination. Pas de compte administrateur, pas de compte réutilisé ailleurs.
-
-L'extension ne demande aucune permission d'hôte à l'installation ; elle ne
-réclame que celle du NAS que vous saisissez, au moment de l'enregistrement des
-réglages. Aucune donnée ne sort du réseau local.
+A notification confirms the download was queued, or shows the error DSM
+returned, spelled out in plain language.
 
 ---
 
-## Détails techniques
+## Security
 
-| Élément | Choix retenu |
+The DSM password is stored **in clear text** in the extension's local storage,
+inside the Firefox profile. That is the limit of the approach: an extension
+has no encrypted vault at its disposal.
+
+The practical consequence: create a **dedicated user** in DSM, in a group that
+can reach nothing but Download Station and can write only to the destination
+folders. No administrator account, no account reused elsewhere.
+
+The extension requests no host permission at install time; it asks only for
+the NAS you entered, at the moment you save the settings. No data leaves the
+local network.
+
+---
+
+## How it works
+
+| Aspect | Choice |
 | --- | --- |
-| Manifest | v3, page d'arrière-plan événementielle (`background.scripts`) |
-| Authentification | `SYNO.API.Auth` v7, `format=sid`, en POST |
-| Session | SID passé en paramètre `_sid`, `credentials: "omit"` |
-| Création de tâche | `SYNO.DownloadStation.Task` v1 `create` |
-| Repli | `SYNO.DownloadStation2.Task` v2 si l'API v1 est absente |
-| Dossiers | `SYNO.FileStation.List` v2 `list_share` |
+| Manifest | v3, event background page (`background.scripts`) |
+| Authentication | `SYNO.API.Auth` v7, `format=sid`, over POST |
+| Session | SID passed as the `_sid` parameter, `credentials: "omit"` |
+| Task creation | `SYNO.DownloadStation.Task` v1 `create` |
+| Fallback | `SYNO.DownloadStation2.Task` v2 when the v1 API is absent |
+| Folders | `SYNO.FileStation.List` v2 `list_share` |
 
-Quelques points qui expliquent le code :
+A few points that explain the code:
 
-- Les requêtes partent sans cookie (`credentials: "omit"`) et s'authentifient
-  uniquement par `_sid`. DSM n'applique alors pas sa protection CSRF, ce qui
-  évite d'avoir à gérer un `SynoToken`.
-- Le mot de passe part en POST, jamais dans une URL.
-- `SYNO.DownloadStation2.Task` est déclarée `requestFormat: JSON` par le NAS :
-  chaque valeur de paramètre doit être du JSON, donc les chaînes portent leurs
-  guillemets (`type="url"`, pas `type=url`). C'est le piège classique de cette
-  API, et la raison pour laquelle le repli est écrit séparément.
-- Les patterns de permission WebExtension ignorent le port : pour un NAS en
-  `https://192.168.1.20:5001`, l'extension demande `https://192.168.1.20/*`,
-  sans le port.
-- Une session expirée (codes DSM 106, 107, 119) déclenche une reconnexion et un
-  seul nouvel essai.
+- Requests carry no cookie (`credentials: "omit"`) and authenticate through
+  `_sid` alone. DSM then does not apply its CSRF protection, which spares us
+  having to handle a `SynoToken`.
+- The password travels in a POST body, never in a URL.
+- The NAS declares `SYNO.DownloadStation2.Task` as `requestFormat: JSON`:
+  every parameter value must be JSON, so strings carry their quotes
+  (`type="url"`, not `type=url`). That is the classic trap with this API, and
+  the reason the fallback is written separately.
+- WebExtension match patterns ignore ports: for a NAS at
+  `https://192.168.1.20:5001`, the extension requests
+  `https://192.168.1.20/*`, without the port.
+- An expired session (DSM codes 106, 107, 119) triggers a reconnection and one
+  single retry.
 
-### Arborescence
+### Layout
 
 ```text
 synodl/
 ├── manifest.json
-├── build.sh              Empaquetage en .xpi
+├── build.sh              Packages the .xpi
 ├── icons/
-│   ├── icon.svg          Source, non embarquée dans le paquet
+│   ├── icon.svg          Source, not shipped in the package
 │   └── icon-{48,96,128}.png
 └── src/
-    ├── syno.js           Client de l'API DSM (auth, tâches, partages)
-    ├── background.js     Menu contextuel, envois, notifications
-    ├── options.html/.js  Réglages
-    ├── popup.html/.js    Envoi manuel depuis la barre d'outils
-    └── style.css         Thème clair et sombre
+    ├── syno.js           DSM API client (auth, tasks, shares)
+    ├── background.js     Context menu, sending, notifications
+    ├── options.html/.js  Settings
+    ├── popup.html/.js    Manual sending from the toolbar
+    └── style.css         Light and dark themes
 ```
 
-Régénérer les icônes après modification du SVG :
+Regenerate the icons after editing the SVG:
 
 ```bash
 cd icons
@@ -249,49 +245,41 @@ for s in 48 96 128; do
 done
 ```
 
-Valider le paquet comme le ferait Mozilla :
+---
 
-```bash
-npx web-ext lint --source-dir=. --self-hosted --ignore-files "dist/**"
-```
+## Troubleshooting
+
+- **NAS unreachable** — certificate not trusted (step 0), wrong address or
+  port, or you are not on the local network.
+- **Wrong username or password** — incorrect DSM account.
+- **Two-factor authentication required** — enter a 2FA code once in the
+  settings.
+- **IP address blocked by the NAS** — DSM auto-block after repeated failures,
+  cleared under Control Panel › Security › Account.
+- **Account lacks Download Station rights** — add the account to the allowed
+  group in DSM.
+- **Destination folder does not exist** — misspelled path, or a stray leading
+  slash.
+- **Destination denied** — the account cannot write to that folder.
+- **API missing from the NAS** — Download Station not installed, or stopped.
+
+The extension logs show up in `about:debugging` → **Inspect** next to SynoDL.
 
 ---
 
-## Dépannage
+## Status
 
-- **NAS injoignable** — certificat non accepté (étape 0), adresse ou port
-  erronés, ou vous n'êtes pas sur le réseau local.
-- **Identifiant ou mot de passe incorrect** — compte DSM erroné.
-- **Double authentification requise** — saisir une fois un code 2FA dans les
-  réglages.
-- **Adresse IP bloquée par le NAS** — blocage automatique DSM après des échecs
-  répétés, à lever dans Panneau de configuration › Sécurité › Compte.
-- **Ce compte DSM n'a pas les droits sur Download Station** — ajouter le compte
-  au groupe autorisé dans DSM.
-- **Le dossier de destination n'existe pas** — chemin mal orthographié, ou
-  slash initial en trop.
-- **Destination refusée** — le compte n'a pas le droit d'écrire dans ce
-  dossier.
-- **API absente du NAS** — Download Station non installé ou arrêté.
-
-Les journaux de l'extension s'affichent dans `about:debugging` → **Inspecter**
-en face de SynoDL.
+Version 1.0.1 is signed by Mozilla and distributed through the
+[releases](https://github.com/antnardo/synodl-firefox/releases). The package
+passes AMO validation with no errors and no warnings, and the whole chain —
+DSM login, context menu, task creation — has been verified against a DS920+
+running DSM 7.3.
 
 ---
 
-## État
+## License
 
-La 1.0.1 est signée par Mozilla et distribuée dans les
-[releases](https://github.com/antnardo/synodl-firefox/releases). Le paquet
-passe la validation AMO sans erreur ni avertissement, et la chaîne complète —
-connexion DSM, menu contextuel, création de tâche — a été vérifiée sur un
-DS920+ en DSM 7.3.
+MIT — see [LICENSE](LICENSE).
 
----
-
-## Licence
-
-MIT — voir [LICENSE](LICENSE).
-
-SynoDL est un projet indépendant, sans lien avec Synology Inc. « Synology » et
-« Download Station » sont des marques de leurs propriétaires respectifs.
+SynoDL is an independent project, unaffiliated with Synology Inc. "Synology"
+and "Download Station" are trademarks of their respective owners.
