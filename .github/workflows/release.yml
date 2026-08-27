@@ -1,0 +1,103 @@
+name: Release
+
+# Pushing a signed tag publishes the version: validate, get it signed by
+# Mozilla, then attach the signed .xpi to a GitHub release.
+#
+#   git tag -s v1.2.0 -m "SynoDL 1.2.0"
+#   git push --follow-tags
+#
+# Requires two repository secrets, from the AMO developer hub under
+# "Manage API Keys": AMO_JWT_ISSUER and AMO_JWT_SECRET.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the tag matches the manifest version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest="$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')"
+          if [ "$tag" != "$manifest" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest version $manifest"
+            exit 1
+          fi
+          echo "version=$manifest" >> "$GITHUB_OUTPUT"
+
+      - name: Check the AMO credentials are present
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::Set the AMO_JWT_ISSUER and AMO_JWT_SECRET repository secrets"
+            exit 1
+          fi
+
+      - name: Validate the package
+        run: |
+          npx --yes web-ext@latest lint --source-dir=. --self-hosted \
+            --ignore-files "dist/**" "build.sh" "icons/icon.svg"
+
+      - name: Upload to AMO and wait for signing
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx --yes web-ext@latest sign --source-dir=. --channel=unlisted \
+            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" \
+            --ignore-files "dist/**" "build.sh" "icons/icon.svg"
+
+      - name: Collect the signed archive
+        id: artifact
+        run: |
+          signed="$(find web-ext-artifacts -name '*.xpi' -print -quit)"
+          if [ -z "$signed" ]; then
+            echo "::error::AMO returned no signed .xpi"
+            exit 1
+          fi
+          target="synodl-${{ steps.version.outputs.version }}.xpi"
+          mv "$signed" "$target"
+          echo "path=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Write the release notes
+        run: |
+          previous="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"
+          {
+            echo "Signed by Mozilla, permanently installable — drag the \`.xpi\`"
+            echo "below into a Firefox window."
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$previous" ]; then
+              git log --format='- %s' "$previous..$GITHUB_REF_NAME"
+            else
+              git log --format='- %s' "$GITHUB_REF_NAME"
+            fi
+          } > NOTES.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.artifact.outputs.path }}#${{ steps.artifact.outputs.path }} — signed by Mozilla" \
+            --title "SynoDL ${{ steps.version.outputs.version }}" \
+            --notes-file NOTES.md

@@ -117,6 +117,29 @@ npx web-ext@latest lint --source-dir=. --self-hosted --ignore-files "dist/**" "b
 Edition, Nightly or ESR: in `about:config`, set
 `xpinstall.signatures.required` to `false`. No effect on the Release edition.
 
+### Releasing
+
+Publishing is handled by [a GitHub Actions
+workflow](.github/workflows/release.yml): pushing a tag validates the package,
+has Mozilla sign it, and attaches the signed `.xpi` to a GitHub release.
+
+```bash
+git tag -s v1.2.0 -m "SynoDL 1.2.0"
+git push --follow-tags
+```
+
+The tag must match `version` in `manifest.json`, or the run stops before
+anything is published. Two repository secrets are required, taken from the AMO
+developer hub under *Manage API Keys*:
+
+```bash
+gh secret set AMO_JWT_ISSUER
+gh secret set AMO_JWT_SECRET
+```
+
+Both commands prompt for the value, so the secrets never reach the shell
+history.
+
 ---
 
 ## Configuration
