@@ -66,10 +66,30 @@ every request the extension makes. It survives restarts.
 2. Drag it into a Firefox window and confirm the installation.
 
 The archive attached to releases is signed by Mozilla, so the installation is
-permanent on any Firefox edition. There is no automatic update, however — to
-move to a newer version, repeat the same two steps with the new `.xpi`.
+permanent on any Firefox edition, and from 1.2.0 onward Firefox picks up new
+versions on its own (see [Updates](#updates)).
 
 Then carry on with [configuration](#configuration).
+
+#### Updates
+
+A self-distributed add-on is signed by Mozilla but not hosted by it, so
+Firefox's usual update check comes back empty. The manifest therefore carries
+an `update_url` pointing at `updates.json`, a small file attached to every
+release and reachable at a URL that always resolves to the newest one:
+
+```text
+https://github.com/antnardo/synodl-firefox/releases/latest/download/updates.json
+```
+
+Firefox fetches it periodically, compares the version it lists against the
+installed one, and offers the `.xpi` it links to. A tampered file cannot push
+arbitrary code: Firefox still requires the archive to carry a valid Mozilla
+signature for this exact add-on ID, which only the owning AMO account can
+obtain.
+
+Versions up to 1.1.0 shipped without `update_url` and will never check for
+anything — installing 1.2.0 by hand once is what starts the mechanism.
 
 ### Temporary load — for development
 

@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "SynoDL",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Envoie un lien vers la Download Station d'un NAS Synology depuis le menu contextuel.",
   "browser_specific_settings": {
     "gecko": {
       "id": "synodl@antnardo.github.io",
+      "update_url": "https://github.com/antnardo/synodl-firefox/releases/latest/download/updates.json",
       "strict_min_version": "142.0",
       "data_collection_permissions": {
         "required": [

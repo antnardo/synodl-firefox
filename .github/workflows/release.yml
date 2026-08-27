@@ -77,6 +77,17 @@ jobs:
           mv "$signed" "$target"
           echo "path=$target" >> "$GITHUB_OUTPUT"
 
+      - name: Write the update manifest
+        run: |
+          id="$(python3 -c 'import json; print(json.load(open("manifest.json"))["browser_specific_settings"]["gecko"]["id"])')"
+          link="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/${{ steps.artifact.outputs.path }}"
+          jq -n --arg id "$id" \
+                --arg version "${{ steps.version.outputs.version }}" \
+                --arg link "$link" \
+                '{addons: {($id): {updates: [{version: $version, update_link: $link}]}}}' \
+            > updates.json
+          cat updates.json
+
       - name: Write the release notes
         run: |
           previous="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"
@@ -99,5 +110,6 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "${{ steps.artifact.outputs.path }}#${{ steps.artifact.outputs.path }} — signed by Mozilla" \
+            "updates.json#update manifest, read by installed copies" \
             --title "SynoDL ${{ steps.version.outputs.version }}" \
             --notes-file NOTES.md
