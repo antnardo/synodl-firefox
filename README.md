@@ -129,16 +129,38 @@ git push --follow-tags
 ```
 
 The tag must match `version` in `manifest.json`, or the run stops before
-anything is published. Two repository secrets are required, taken from the AMO
-developer hub under *Manage API Keys*:
+anything is published — as it does if the credentials below are missing, or if
+the package fails validation. Nothing reaches AMO until all three checks pass.
+
+#### AMO API credentials
+
+The workflow uploads to AMO on your behalf, which takes an API key pair issued
+by Mozilla. Generate one at **Manage API Keys** in the developer hub
+(`addons.mozilla.org/developers/addon/api/key/`), signed in as the account
+that owns the add-on. The page gives you two values:
+
+| Field on the AMO page | Repository secret | Shape |
+| --- | --- | --- |
+| JWT issuer | `AMO_JWT_ISSUER` | `user:18294746:492` |
+| JWT secret | `AMO_JWT_SECRET` | 64 hexadecimal characters |
+
+**The JWT secret is displayed once, when you generate it**, and cannot be read
+back afterwards. Copy it into a password manager straight away. Losing it is
+not serious — revoke the pair and generate another — but the old one stops
+working the moment you do.
+
+Treat it as a credential: it carries the right to publish versions of your
+add-ons. Store it in the repository, never in the working tree:
 
 ```bash
 gh secret set AMO_JWT_ISSUER
 gh secret set AMO_JWT_SECRET
 ```
 
-Both commands prompt for the value, so the secrets never reach the shell
-history.
+Both commands prompt for the value with the input hidden, so the secrets reach
+GitHub without passing through the shell history. Check the result with
+`gh secret list` — it prints the names and dates, never the values, which
+GitHub itself cannot show again either.
 
 ---
 
