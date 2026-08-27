@@ -67,11 +67,20 @@
       </div>
       <div class="chips" id="shares"></div>
 
-      <h2>Notifications</h2>
-      <label class="check">
-        <input id="notify" type="checkbox" />
-        Afficher une notification quand un téléchargement est ajouté
-      </label>
+      <h2>Confirmation</h2>
+      <label for="feedback">Retour visuel après un envoi</label>
+      <select id="feedback">
+        <option value="banner">Bannière dans la page</option>
+        <option value="notification">Notification système</option>
+        <option value="none">Aucun</option>
+      </select>
+      <p class="hint">
+        La bannière apparaît dès le clic, en attente, puis confirme ou affiche
+        l'erreur. Sur les pages où Firefox interdit l'injection (onglets
+        <code>about:</code>, visionneuse PDF interne), elle bascule
+        automatiquement sur une notification système. Les erreurs restent
+        signalées même avec « Aucun ».
+      </p>
 
       <div class="buttons">
         <button id="save" class="primary" type="button">Enregistrer</button>

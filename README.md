@@ -131,6 +131,7 @@ Extension settings (`about:addons` → SynoDL → Preferences):
 | Username / password | a dedicated DSM account (see below) |
 | 2FA code | only if the account requires it, once |
 | Destinations | one path per line, e.g. `video/Films` |
+| Confirmation | in-page banner, system notification, or none |
 
 The **List shared folders** button queries File Station and offers the shares
 in one click. **Test connection** exercises the whole chain and reports the
@@ -171,8 +172,16 @@ it. Later logins no longer need a code.
 - **Toolbar button** → paste several links at once, one per line, or pull in
   the current tab's URL.
 
-A notification confirms the download was queued, or shows the error DSM
-returned, spelled out in plain language.
+A banner slides in at the top right of the page the moment you click,
+showing a spinner while the request is in flight, then turning green on
+success or red with the reason DSM returned. It closes on its own — sooner on
+success than on failure — and immediately if you click it.
+
+Where Firefox forbids script injection — `about:` tabs, the built-in PDF
+viewer, addons.mozilla.org — the banner cannot be drawn and the extension
+falls back to a system notification on its own. The **Confirmation** setting
+switches to notifications everywhere, or turns success reports off entirely;
+failures are always reported either way.
 
 ---
 
@@ -202,6 +211,7 @@ local network.
 | Task creation | `SYNO.DownloadStation.Task` v1 `create` |
 | Fallback | `SYNO.DownloadStation2.Task` v2 when the v1 API is absent |
 | Folders | `SYNO.FileStation.List` v2 `list_share` |
+| Banner | `scripting.executeScript` into the active tab, shadow DOM |
 
 A few points that explain the code:
 
@@ -218,6 +228,12 @@ A few points that explain the code:
   `https://192.168.1.20/*`, without the port.
 - An expired session (DSM codes 106, 107, 119) triggers a reconnection and one
   single retry.
+- The banner lives in a shadow root, and the critical display properties of
+  its host element are set inline with `!important` — otherwise a page rule
+  targeting the host's id could hide it outright.
+- Injecting into the active tab needs no broad host permission: clicking a
+  context-menu entry grants `activeTab` for that tab, which is what
+  `scripting.executeScript` runs on.
 
 ### Layout
 

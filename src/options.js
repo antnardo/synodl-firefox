@@ -16,7 +16,7 @@ const fields = {
     password: document.getElementById("password"),
     otp: document.getElementById("otp"),
     destinations: document.getElementById("destinations"),
-    notify: document.getElementById("notify"),
+    feedback: document.getElementById("feedback"),
 };
 
 const statusBox = document.getElementById("status");
@@ -64,7 +64,7 @@ function readForm() {
         username: fields.username.value.trim(),
         password: fields.password.value,
         destinations: parseDestinations(fields.destinations.value),
-        notify: fields.notify.checked,
+        feedback: fields.feedback.value,
     };
 }
 
@@ -76,7 +76,7 @@ async function restore() {
     fields.username.value = settings.username;
     fields.password.value = settings.password;
     fields.destinations.value = settings.destinations.join("\n");
-    fields.notify.checked = settings.notify;
+    fields.feedback.value = settings.feedback;
     deviceState.textContent = settings.deviceId
         ? "Un jeton d'appareil est enregistré : le code 2FA n'est plus demandé."
         : "";

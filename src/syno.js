@@ -25,7 +25,7 @@ const SYNO_DEFAULTS = {
     password: "",
     deviceId: "",
     destinations: [],
-    notify: true,
+    feedback: "banner",
 };
 
 class SynoError extends Error {
@@ -97,7 +97,16 @@ function synoOriginPattern(settings) {
 }
 
 async function synoLoadSettings() {
-    const settings = await browser.storage.local.get(SYNO_DEFAULTS);
+    // `feedback: null` distingue « jamais réglé » de la valeur par défaut,
+    // ce qui permet de reprendre l'ancien booléen `notify` une seule fois.
+    const settings = await browser.storage.local.get({
+        ...SYNO_DEFAULTS,
+        feedback: null,
+        notify: true,
+    });
+    if (settings.feedback === null) {
+        settings.feedback = settings.notify === false ? "none" : "banner";
+    }
     settings.port = Number(settings.port) || 5001;
     if (!Array.isArray(settings.destinations)) {
         settings.destinations = [];

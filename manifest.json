@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SynoDL",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Envoie un lien vers la Download Station d'un NAS Synology depuis le menu contextuel.",
   "browser_specific_settings": {
     "gecko": {
@@ -23,7 +23,8 @@
     "contextMenus",
     "storage",
     "notifications",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
   "optional_host_permissions": [
     "*://*/*"
