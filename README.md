@@ -248,6 +248,11 @@ still queued behind it. Nothing further is reported, since you are the one who
 called it off. Once the banner has turned green or red the send is over, and
 the cross merely closes the card.
 
+A request that gets no answer gives up after 20 seconds rather than hanging,
+and the banner then names the address that stayed silent. When several links
+were queued, the first such failure stops the batch: the rest would only have
+timed out in turn.
+
 Where Firefox forbids script injection — `about:` tabs, the built-in PDF
 viewer, addons.mozilla.org — the banner cannot be drawn and the extension
 falls back to a system notification on its own. The **Confirmation** setting
@@ -283,7 +288,8 @@ local network.
 | Fallback | `SYNO.DownloadStation2.Task` v2 when the v1 API is absent |
 | Folders | `SYNO.FileStation.List` v2 `list_share` |
 | Banner | `scripting.executeScript` into the active tab, shadow DOM |
-| Cancelling | An `AbortSignal` the banner's cross trips by message |
+| Timeout | `AbortSignal.timeout`, 20 s per request |
+| Cancelling | `AbortSignal.any`, driven by a `cancel` message from the banner |
 
 A few points that explain the code:
 
@@ -300,10 +306,14 @@ A few points that explain the code:
   `https://192.168.1.20/*`, without the port.
 - An expired session (DSM codes 106, 107, 119) triggers a reconnection and one
   single retry.
+- Every request carries `AbortSignal.any([timeout, caller])`, so the 20-second
+  deadline and the banner's cancel cross abort it through the same path.
+  Without the deadline an unreachable NAS would leave `fetch` waiting on
+  Firefox's own connection timeout — over a minute with nothing on screen.
 - The banner's cross reaches the background script by `runtime.sendMessage`,
   which is what the injected function uses to name the send it wants stopped.
-  A cancel the user asked for stays silent: there is nothing to report back
-  to someone who just called the send off.
+  Failures the extension gave up on still get reported; a cancel the user
+  asked for stays silent.
 - The banner lives in a shadow root, and the critical display properties of
   its host element are set inline with `!important` — otherwise a page rule
   targeting the host's id could hide it outright.
@@ -342,7 +352,8 @@ done
 ## Troubleshooting
 
 - **NAS unreachable** — certificate not trusted (step 0), wrong address or
-  port, or you are not on the local network.
+  port, or you are not on the local network. A NAS that is powered down or off
+  the network produces the same message after the 20-second timeout.
 - **Wrong username or password** — incorrect DSM account.
 - **Two-factor authentication required** — enter a 2FA code once in the
   settings.

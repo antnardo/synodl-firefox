@@ -403,8 +403,8 @@ async function sendUrls(urls, destination, tabId = null) {
         );
     }
 
-    // Une fois la croix cliquée, les URL non encore traitées ressortent
-    // « Envoi annulé » sans qu'aucune requête ne parte.
+    // Une fois le signal interrompu, chaque requête restante échoue
+    // aussitôt : les URL non traitées ressortent « Envoi annulé ».
     const controller = new AbortController();
     pendingSends.set(id, controller);
     const results = [];
@@ -418,17 +418,23 @@ async function sendUrls(urls, destination, tabId = null) {
             results.push({ url, ok: true, message: "" });
         } catch (err) {
             results.push({ url, ok: false, message: err.message });
+            // NAS injoignable : les URL suivantes échoueraient de la même
+            // façon, chacune sur son propre délai. On s'arrête là.
+            if (err.transport) {
+                controller.abort();
+            }
         }
     }
     pendingSends.delete(id);
 
+    // `delete` rend true si l'identifiant y était : l'envoi a été annulé
+    // depuis la croix, et non abandonné faute de réponse du NAS.
+    const wasCancelled = cancelled.delete(id);
     const failures = results.filter((result) => !result.ok);
-    if (failures.length > 0 && cancelled.has(id)) {
-        // La croix a fermé la carte en l'annulant : il n'y a rien à ajouter.
-        cancelled.delete(id);
+    if (failures.length > 0 && wasCancelled) {
+        // La carte est déjà fermée, et l'utilisateur sait pourquoi.
         return results;
     }
-    cancelled.delete(id);
     if (failures.length > 0) {
         await announce(
             tabId,

@@ -28,6 +28,13 @@ const SYNO_DEFAULTS = {
     feedback: "banner",
 };
 
+/**
+ * Délai maximal d'une requête vers le NAS. Sans lui, un NAS éteint ou hors
+ * réseau laisserait `fetch` attendre le délai de connexion de Firefox, soit
+ * plus d'une minute sans le moindre retour.
+ */
+const SYNO_TIMEOUT_MS = 20000;
+
 class SynoError extends Error {
     /**
      * `transport` marque un échec survenu avant toute réponse de DSM — NAS
@@ -120,11 +127,20 @@ async function synoLoadSettings() {
     return settings;
 }
 
-/** Traduit l'échec d'un `fetch` : interruption demandée, ou réseau. */
+/** Traduit l'échec d'un `fetch` : interruption, délai dépassé, ou réseau. */
 function synoNetworkError(settings, err) {
     const where = `${settings.host}:${settings.port}`;
     if (err.name === "AbortError") {
         return new SynoError("Envoi annulé.", null, true);
+    }
+    if (err.name === "TimeoutError") {
+        return new SynoError(
+            `NAS injoignable : ${where} n'a pas répondu en ` +
+                `${SYNO_TIMEOUT_MS / 1000} s. Vérifiez qu'il est allumé ` +
+                "et que vous êtes sur son réseau.",
+            null,
+            true
+        );
     }
     return new SynoError(
         `NAS injoignable sur ${where}. ` +
@@ -135,7 +151,10 @@ function synoNetworkError(settings, err) {
     );
 }
 
-/** Une requête vers le NAS, que `signal` permet d'interrompre. */
+/**
+ * Une requête vers le NAS, bornée par SYNO_TIMEOUT_MS.
+ * `signal` permet en plus à l'appelant de l'interrompre.
+ */
 async function synoRequest(
     settings,
     cgi,
@@ -144,7 +163,11 @@ async function synoRequest(
 ) {
     const url = `${synoBaseUrl(settings)}/${cgi}`;
     const body = new URLSearchParams(params);
-    const init = { credentials: "omit", signal };
+    const signals = [AbortSignal.timeout(SYNO_TIMEOUT_MS)];
+    if (signal) {
+        signals.push(signal);
+    }
+    const init = { credentials: "omit", signal: AbortSignal.any(signals) };
     let response;
 
     try {
