@@ -29,10 +29,16 @@ const SYNO_DEFAULTS = {
 };
 
 class SynoError extends Error {
-    constructor(message, code = null) {
+    /**
+     * `transport` marque un échec survenu avant toute réponse de DSM — NAS
+     * injoignable, délai dépassé, envoi annulé. Réessayer une autre URL de
+     * la même série ne servirait alors à rien.
+     */
+    constructor(message, code = null, transport = false) {
         super(message);
         this.name = "SynoError";
         this.code = code;
+        this.transport = transport;
     }
 }
 
@@ -114,20 +120,40 @@ async function synoLoadSettings() {
     return settings;
 }
 
-async function synoRequest(settings, cgi, params, method = "POST") {
+/** Traduit l'échec d'un `fetch` : interruption demandée, ou réseau. */
+function synoNetworkError(settings, err) {
+    const where = `${settings.host}:${settings.port}`;
+    if (err.name === "AbortError") {
+        return new SynoError("Envoi annulé.", null, true);
+    }
+    return new SynoError(
+        `NAS injoignable sur ${where}. ` +
+            "Vérifiez l'adresse et le port, et acceptez une fois le " +
+            "certificat du NAS dans Firefox (voir le README).",
+        null,
+        true
+    );
+}
+
+/** Une requête vers le NAS, que `signal` permet d'interrompre. */
+async function synoRequest(
+    settings,
+    cgi,
+    params,
+    { method = "POST", signal = null } = {}
+) {
     const url = `${synoBaseUrl(settings)}/${cgi}`;
     const body = new URLSearchParams(params);
+    const init = { credentials: "omit", signal };
     let response;
 
     try {
         if (method === "GET") {
-            response = await fetch(`${url}?${body.toString()}`, {
-                credentials: "omit",
-            });
+            response = await fetch(`${url}?${body.toString()}`, init);
         } else {
             response = await fetch(url, {
+                ...init,
                 method: "POST",
-                credentials: "omit",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
@@ -135,11 +161,7 @@ async function synoRequest(settings, cgi, params, method = "POST") {
             });
         }
     } catch (err) {
-        throw new SynoError(
-            `NAS injoignable sur ${settings.host}:${settings.port}. ` +
-                "Vérifiez l'adresse et le port, et acceptez une fois le " +
-                "certificat du NAS dans Firefox (voir le README)."
-        );
+        throw synoNetworkError(settings, err);
     }
 
     if (!response.ok) {
@@ -164,7 +186,7 @@ function synoSessionKey(settings) {
  * Si `otpCode` est fourni, on demande en plus un jeton d'appareil (`did`)
  * que l'on stocke : les connexions suivantes n'auront plus besoin du code 2FA.
  */
-async function synoLogin(settings, otpCode = "") {
+async function synoLogin(settings, otpCode = "", signal = null) {
     if (!settings.host || !settings.username) {
         throw new SynoError(
             "Configurez d'abord l'adresse du NAS et le compte DSM."
@@ -189,7 +211,7 @@ async function synoLogin(settings, otpCode = "") {
         params.device_id = settings.deviceId;
     }
 
-    const json = await synoRequest(settings, "entry.cgi", params);
+    const json = await synoRequest(settings, "entry.cgi", params, { signal });
     if (!json.success) {
         const code = json.error && json.error.code;
         throw new SynoError(describeError(code, ERRORS_AUTH), code);
@@ -197,13 +219,13 @@ async function synoLogin(settings, otpCode = "") {
     return { sid: json.data.sid, deviceId: json.data.did || "" };
 }
 
-async function synoGetSid(settings, force = false) {
+async function synoGetSid(settings, force = false, signal = null) {
     const key = synoSessionKey(settings);
     if (!force && synoSession && synoSession.key === key) {
         return synoSession.sid;
     }
 
-    const { sid, deviceId } = await synoLogin(settings);
+    const { sid, deviceId } = await synoLogin(settings, "", signal);
     if (deviceId && deviceId !== settings.deviceId) {
         await browser.storage.local.set({ deviceId });
     }
@@ -215,8 +237,8 @@ function synoResetSession() {
     synoSession = null;
 }
 
-async function synoWithSession(settings, callback) {
-    const sid = await synoGetSid(settings);
+async function synoWithSession(settings, callback, signal = null) {
+    const sid = await synoGetSid(settings, false, signal);
     try {
         return await callback(sid);
     } catch (err) {
@@ -224,7 +246,7 @@ async function synoWithSession(settings, callback) {
             throw err;
         }
         synoResetSession();
-        return callback(await synoGetSid(settings, true));
+        return callback(await synoGetSid(settings, true, signal));
     }
 }
 
@@ -237,37 +259,44 @@ async function synoWithSession(settings, callback) {
  *
  * `url` accepte http(s), ftp, magnet, ed2k… `destination` est un chemin
  * relatif à la racine des partages, sans slash initial (ex. `video/Films`).
- * Vide = destination par défaut de Download Station.
+ * Vide = destination par défaut de Download Station. Interrompre `signal`
+ * abandonne l'envoi, quelle que soit l'étape en cours.
  */
-async function synoCreateTask(settings, url, destination = "") {
-    return synoWithSession(settings, async (sid) => {
-        const params = {
-            api: "SYNO.DownloadStation.Task",
-            version: "1",
-            method: "create",
-            uri: url,
-            _sid: sid,
-        };
-        if (destination) {
-            params.destination = destination;
-        }
+async function synoCreateTask(settings, url, destination = "", signal = null) {
+    return synoWithSession(
+        settings,
+        async (sid) => {
+            const params = {
+                api: "SYNO.DownloadStation.Task",
+                version: "1",
+                method: "create",
+                uri: url,
+                _sid: sid,
+            };
+            if (destination) {
+                params.destination = destination;
+            }
 
-        const json = await synoRequest(
-            settings,
-            "DownloadStation/task.cgi",
-            params
-        );
-        if (json.success) {
-            return;
-        }
+            const json = await synoRequest(
+                settings,
+                "DownloadStation/task.cgi",
+                params,
+                { signal }
+            );
+            if (json.success) {
+                return;
+            }
 
-        const code = json.error && json.error.code;
-        // Certains DSM récents ne servent plus `create` que via DownloadStation2.
-        if ([102, 103, 104].includes(code)) {
-            return synoCreateTaskV2(settings, sid, url, destination);
-        }
-        throw new SynoError(describeError(code, ERRORS_TASK), code);
-    });
+            const code = json.error && json.error.code;
+            // Certains DSM récents ne servent plus `create` que via
+            // DownloadStation2.
+            if ([102, 103, 104].includes(code)) {
+                return synoCreateTaskV2(settings, sid, url, destination, signal);
+            }
+            throw new SynoError(describeError(code, ERRORS_TASK), code);
+        },
+        signal
+    );
 }
 
 /**
@@ -275,7 +304,7 @@ async function synoCreateTask(settings, url, destination = "") {
  * Cette API est déclarée `requestFormat: JSON` : chaque valeur de paramètre
  * doit être du JSON, donc les chaînes portent leurs guillemets.
  */
-async function synoCreateTaskV2(settings, sid, url, destination) {
+async function synoCreateTaskV2(settings, sid, url, destination, signal) {
     const params = {
         api: "SYNO.DownloadStation2.Task",
         version: "2",
@@ -289,7 +318,7 @@ async function synoCreateTaskV2(settings, sid, url, destination) {
         params.destination = JSON.stringify(destination);
     }
 
-    const json = await synoRequest(settings, "entry.cgi", params);
+    const json = await synoRequest(settings, "entry.cgi", params, { signal });
     if (!json.success) {
         const code = json.error && json.error.code;
         throw new SynoError(describeError(code, ERRORS_TASK), code);
@@ -308,7 +337,7 @@ async function synoGetInfo(settings) {
                 method: "getinfo",
                 _sid: sid,
             },
-            "GET"
+            { method: "GET" }
         );
         if (!json.success) {
             const code = json.error && json.error.code;
@@ -330,7 +359,7 @@ async function synoGetConfig(settings) {
                 method: "getconfig",
                 _sid: sid,
             },
-            "GET"
+            { method: "GET" }
         );
         if (!json.success) {
             const code = json.error && json.error.code;
@@ -352,7 +381,7 @@ async function synoListShares(settings) {
                 method: "list_share",
                 _sid: sid,
             },
-            "GET"
+            { method: "GET" }
         );
         if (!json.success) {
             const code = json.error && json.error.code;

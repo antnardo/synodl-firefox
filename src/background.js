@@ -20,6 +20,20 @@ const BANNER_MS_ERROR = 9000;
 
 let bannerSeq = 0;
 
+/**
+ * Envois en cours, par identifiant de bannière. La croix de la bannière
+ * envoie un message `cancel` portant cet identifiant ; le contrôleur
+ * correspondant interrompt alors la requête en vol.
+ */
+const pendingSends = new Map();
+
+/**
+ * Identifiants annulés depuis la bannière. Un envoi peut aussi s'interrompre
+ * de lui-même quand le NAS est injoignable, et il faut alors le dire : seule
+ * une annulation demandée par l'utilisateur reste silencieuse.
+ */
+const cancelled = new Set();
+
 /* ------------------------------------------------------------------ */
 /* Menu contextuel                                                    */
 /* ------------------------------------------------------------------ */
@@ -114,6 +128,11 @@ function shortLabel(url) {
  *
  * Elle est idempotente — rappelée avec le même `id`, elle met à jour la
  * carte existante au lieu d'en empiler une seconde.
+ *
+ * Un clic sur la carte la ferme. Sa croix fait de même, et interrompt en
+ * plus l'envoi s'il est encore en cours, par un message au script
+ * d'arrière-plan : `browser` est ici le global du bac à sable des scripts
+ * de contenu, pas celui de ce fichier.
  */
 function synodlBanner(id, state, title, message, autoCloseMs) {
     const HOST_ID = "synodl-banner-host";
@@ -185,7 +204,7 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .card.in { opacity: 1; transform: none; }
-.text { display: flex; flex-direction: column; min-width: 0; }
+.text { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; }
 .title { font-weight: 600; }
 .msg { opacity: 0.75; overflow-wrap: anywhere; }
 .mark {
@@ -203,6 +222,22 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
 }
 .ok .mark { background: #1a7f37; }
 .error .mark { background: #b42318; }
+.close {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 20px;
+    height: 20px;
+    margin: -2px -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    opacity: 0.55;
+    font: 400 18px/20px system-ui, -apple-system, "Segoe UI", sans-serif;
+    cursor: pointer;
+}
+.close:hover { opacity: 1; background: rgba(0, 0, 0, 0.07); }
 @keyframes synodl-spin { to { transform: rotate(360deg); } }
 @media (prefers-color-scheme: dark) {
     .card {
@@ -216,6 +251,7 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
     }
     .ok .mark { background: #4ac26b; }
     .error .mark { background: #ff6b62; }
+    .close:hover { background: rgba(255, 255, 255, 0.12); }
 }`;
 
         const stack = document.createElement("div");
@@ -227,6 +263,13 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
     const stack = host.shadowRoot.querySelector(".stack");
     let card = stack.querySelector(`[data-id="${id}"]`);
 
+    const dismiss = () => {
+        card.remove();
+        if (!stack.children.length) {
+            host.remove();
+        }
+    };
+
     if (!card) {
         card = document.createElement("div");
         card.dataset.id = id;
@@ -234,8 +277,17 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
         card.innerHTML =
             '<span class="mark"></span>' +
             '<span class="text"><span class="title"></span>' +
-            '<span class="msg"></span></span>';
-        card.addEventListener("click", () => card.remove());
+            '<span class="msg"></span></span>' +
+            '<button class="close" type="button">&times;</button>';
+        card.addEventListener("click", dismiss);
+        // Le clic sur la croix remonte ensuite jusqu'à la carte, qui se ferme.
+        card.querySelector(".close").addEventListener("click", () => {
+            if (card.classList.contains("pending")) {
+                browser.runtime
+                    .sendMessage({ type: "cancel", id })
+                    .catch(() => {});
+            }
+        });
         stack.appendChild(card);
         requestAnimationFrame(() => card.classList.add("in"));
     }
@@ -243,17 +295,15 @@ function synodlBanner(id, state, title, message, autoCloseMs) {
     card.className = `card ${state}${card.classList.contains("in") ? " in" : ""}`;
     card.querySelector(".title").textContent = title;
     card.querySelector(".msg").textContent = message || "";
+    const close = card.querySelector(".close");
+    close.title = state === "pending" ? "Annuler l'envoi" : "Fermer";
+    close.setAttribute("aria-label", close.title);
 
     clearTimeout(card.synodlTimer);
     if (autoCloseMs > 0) {
         card.synodlTimer = setTimeout(() => {
             card.classList.remove("in");
-            setTimeout(() => {
-                card.remove();
-                if (!stack.children.length) {
-                    host.remove();
-                }
-            }, 220);
+            setTimeout(dismiss, 220);
         }, autoCloseMs);
     }
 }
@@ -353,17 +403,32 @@ async function sendUrls(urls, destination, tabId = null) {
         );
     }
 
+    // Une fois la croix cliquée, les URL non encore traitées ressortent
+    // « Envoi annulé » sans qu'aucune requête ne parte.
+    const controller = new AbortController();
+    pendingSends.set(id, controller);
     const results = [];
     for (const url of urls) {
+        if (controller.signal.aborted) {
+            results.push({ url, ok: false, message: "Envoi annulé." });
+            continue;
+        }
         try {
-            await synoCreateTask(settings, url, destination);
+            await synoCreateTask(settings, url, destination, controller.signal);
             results.push({ url, ok: true, message: "" });
         } catch (err) {
             results.push({ url, ok: false, message: err.message });
         }
     }
+    pendingSends.delete(id);
 
     const failures = results.filter((result) => !result.ok);
+    if (failures.length > 0 && cancelled.has(id)) {
+        // La croix a fermé la carte en l'annulant : il n'y a rien à ajouter.
+        cancelled.delete(id);
+        return results;
+    }
+    cancelled.delete(id);
     if (failures.length > 0) {
         await announce(
             tabId,
@@ -419,8 +484,18 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 browser.runtime.onMessage.addListener((message) => {
-    if (message && message.type === "send") {
+    if (!message) {
+        return undefined;
+    }
+    if (message.type === "send") {
         return sendUrls(message.urls, message.destination);
+    }
+    if (message.type === "cancel") {
+        const controller = pendingSends.get(message.id);
+        if (controller) {
+            cancelled.add(message.id);
+            controller.abort();
+        }
     }
     return undefined;
 });
