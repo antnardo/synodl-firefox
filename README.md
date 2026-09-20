@@ -89,7 +89,8 @@ signature for this exact add-on ID, which only the owning AMO account can
 obtain.
 
 Versions up to 1.1.0 shipped without `update_url` and will never check for
-anything — installing 1.2.0 by hand once is what starts the mechanism.
+anything — installing 1.2.0 or later by hand once is what starts the
+mechanism.
 
 ### Temporary load — for development
 
@@ -372,11 +373,14 @@ The extension logs show up in `about:debugging` → **Inspect** next to SynoDL.
 
 ## Status
 
-Version 1.0.1 is signed by Mozilla and distributed through the
-[releases](https://github.com/antnardo/synodl-firefox/releases). The package
-passes AMO validation with no errors and no warnings, and the whole chain —
-DSM login, context menu, task creation — has been verified against a DS920+
-running DSM 7.3.
+Version 1.3.0 is the current release, signed by Mozilla and distributed through
+the [releases](https://github.com/antnardo/synodl-firefox/releases) as
+`synodl-1.3.0.xpi`, next to the `updates.json` that installed copies read. It
+adds cancelling a send in flight from the banner, and giving up on an
+unreachable NAS instead of waiting on Firefox. The package passes AMO
+validation with no errors and no warnings, and the whole chain — DSM login,
+context menu, task creation — has been verified against a DS920+ running
+DSM 7.3.
 
 ---
 
